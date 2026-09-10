@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Tools ki Dukan · Return OTPs</title>
+<style>
+  :root{--ink:#17181c;--ink-2:#5b616b;--leaf:#F2540A;--leaf-deep:#C23D00;--mint:#ffe6d8;--mint-2:#fff3ec;--paper:#faf7f5;--card:#fff;--line:#eadfd8;--alert:#b3261e;--warn:#8a5a00;--r:14px}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,Roboto,sans-serif;font-size:16px;line-height:1.4}
+  button,input,select{font:inherit}button{cursor:pointer}
+  header{background:#101216;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px}
+  header img{height:34px;width:auto;display:block}
+  header .sub{font-size:12px;opacity:.8}
+  .wrap{max-width:760px;margin:0 auto;padding:0 16px}
+  .toolbar{display:flex;gap:8px;padding-top:12px}
+  .search{flex:1;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:0 14px;height:42px}
+  .search input{border:0;outline:0;background:transparent;flex:1;min-width:0}
+  .search:focus-within{border-color:var(--leaf)}
+  .btn{height:42px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);color:var(--leaf-deep);font-weight:700;white-space:nowrap}
+  .btn.primary{background:var(--leaf);border-color:var(--leaf);color:#fff}
+  .btn.danger{color:var(--alert)}
+  .btn.small{height:34px;padding:0 12px;font-size:13px}
+  .btn[disabled]{opacity:.55;cursor:progress}
+  .tabs{display:flex;gap:6px;padding-top:12px}
+  .tab{flex:1;height:40px;border-radius:10px;border:0;background:var(--mint-2);color:var(--ink-2);font-weight:700}
+  .tab[aria-selected=true]{background:var(--mint);color:var(--leaf-deep)}
+  main{padding:12px 0 110px}
+  .summary{font-size:14px;color:var(--ink-2);margin:4px 2px 10px}.summary b{color:var(--ink)}
+  .card{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+  .head{display:flex;align-items:center;gap:10px;padding:12px 14px}
+  .head .title{flex:1;min-width:0}
+  .head strong{display:block;font-size:16px;font-weight:800;overflow-wrap:anywhere}
+  .head .sub{display:block;font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+  .pill{background:var(--mint);color:var(--leaf-deep);border-radius:999px;padding:4px 10px;font-size:13px;font-weight:700;white-space:nowrap}
+  .pill.warn{background:#fff3d6;color:var(--warn)}.pill.bad{background:#fdecea;color:var(--alert)}
+  .icon{width:36px;height:36px;border-radius:50%;border:0;background:transparent;color:var(--leaf-deep);display:grid;place-items:center;flex:none}
+  .icon.red{color:var(--alert)}
+  .icon.spin svg{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+  .rows{border-top:1px solid var(--line);padding:6px 10px 10px}
+  .row{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .name{font-weight:700;color:var(--leaf-deep);flex:1;min-width:0}
+  .row .name small{display:block;font-weight:600;color:var(--ink-2);font-size:12px}
+  .otp{display:inline-flex;align-items:center;gap:6px;background:var(--leaf);color:#fff;border:0;border-radius:999px;padding:6px 12px;font-weight:800;font-size:17px;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+  .otp.copied{background:var(--leaf-deep)}
+  .count{font-size:13px;color:var(--ink-2);font-weight:700;white-space:nowrap}
+  .error{margin:0 14px 12px;padding:10px 12px;background:#fdecea;color:var(--alert);border-radius:10px;font-size:13px}
+  .empty{text-align:center;padding:48px 20px;color:var(--ink-2)}.empty strong{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+  .field{margin-bottom:12px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:4px}
+  .field input,.field select{width:100%;height:44px;border:1.5px solid var(--line);border-radius:10px;padding:0 12px;outline:0;background:#fff}
+  .field input:focus,.field select:focus{border-color:var(--leaf)}
+  .field small{display:block;color:var(--ink-2);font-size:12px;margin-top:3px}
+  .err{color:var(--alert);font-size:13px;min-height:18px}
+  .acc{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .acc:last-child{border-bottom:0}
+  .acc input[type=checkbox]{width:22px;height:22px;accent-color:var(--leaf);flex:none}
+  .acc .title{flex:1;min-width:0}
+  .selbar{display:flex;align-items:center;gap:12px;padding:12px 14px}
+  .selbar label{display:flex;align-items:center;gap:8px;font-weight:700;flex:1}
+  .selbar input{width:22px;height:22px;accent-color:var(--leaf)}
+  .switch{display:flex;align-items:center;gap:10px;font-weight:700}
+  .switch input{width:22px;height:22px;accent-color:var(--leaf)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+  .toast.show{opacity:1}
+  .sectionTitle{font-size:18px;font-weight:800;margin:18px 0 8px}
+</style>
+</head>
+<body>
+<header>
+  <img src="img/logo.png" alt="Tools ki Dukan" />
+  <div><div style="font-weight:800;font-size:15px">Return OTPs</div><div class="sub" id="sub">all Meesho seller accounts, on this phone</div></div>
+</header>
+
+<div class="wrap">
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="otp" aria-selected="true">OTP</button>
+    <button class="tab" role="tab" data-tab="accounts" aria-selected="false">Accounts</button>
+    <button class="tab" role="tab" data-tab="schedule" aria-selected="false">Settings</button>
+  </div>
+  <main>
+    <!-- OTP tab -->
+    <section id="pane-otp">
+      <div class="toolbar" style="padding-top:0">
+        <label class="search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="search" type="search" placeholder="Search account, email or courier" autocomplete="off" />
+        </label>
+        <button class="btn primary" id="refreshAll">Refresh all</button>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab" data-view="account" aria-selected="true">Account-wise</button>
+        <button class="tab" data-view="carrier" aria-selected="false">Courier-wise</button>
+      </div>
+      <div class="summary" id="summary" style="margin-top:12px"></div>
+      <div id="otpContent"></div>
+    </section>
+
+    <!-- Accounts tab -->
+    <section id="pane-accounts" hidden>
+      <div class="card">
+        <div class="selbar">
+          <label><input type="checkbox" id="selAll" /> Select all</label>
+          <button class="btn small primary" id="refreshAllAcc">Refresh all OTPs</button>
+          <button class="btn small" id="reloginSel" disabled>Relogin selected</button>
+        </div>
+        <div id="accList"></div>
+      </div>
+      <div class="sectionTitle">Add account</div>
+      <div class="card" style="padding:14px">
+        <div class="field"><label for="f-email">Meesho supplier email / mobile</label><input id="f-email" type="text" autocomplete="off" /></div>
+        <div class="field"><label for="f-pass">Password</label><input id="f-pass" type="password" autocomplete="new-password" /></div>
+        <div class="field"><label for="f-name">Store name (optional)</label><input id="f-name" placeholder="Shown in the OTP list" /></div>
+        <div class="err" id="accErr"></div>
+        <button class="btn primary" id="loginBtn" style="width:100%">Login</button>
+        <small style="display:block;color:var(--ink-2);margin-top:8px">The Meesho login page opens once so you can enter the SMS-OTP. After that this account stays logged in.</small>
+      </div>
+    </section>
+
+    <!-- Settings tab -->
+    <section id="pane-schedule" hidden>
+      <div class="card" style="padding:14px">
+        <div class="field"><label for="f-int">Auto-refresh every</label>
+          <select id="f-int"><option value="0">Off</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option></select>
+          <small>The app re-reads the Meesho panel for every account on this schedule using the saved login — no re-login needed.</small></div>
+        <label class="switch" style="margin:6px 0 12px"><input type="checkbox" id="f-bg" /> Keep running in background</label>
+        <small style="display:block;color:var(--ink-2);margin-bottom:12px">Allow the app to keep a small notification running so OTPs stay fresh and logins stay alive. If Android keeps killing it, also turn OFF battery optimisation for this app in phone Settings.</small>
+        <button class="btn primary" id="saveInt">Save</button>
+      </div>
+      <div class="card" style="padding:14px;margin-top:10px;color:var(--ink-2);font-size:13px">
+        Everything (accounts, passwords, sessions, OTPs) is stored only on this phone. Nothing is sent to any server. Automating the Meesho panel may be against Meesho's Terms — use at your own responsibility.
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- native bridge (replaces the old HTTP server) ---------- */
+let __seq=0; const __pending={};
+window.__nativeResolve=function(id,ok,jsonStr){
+  const p=__pending[id]; if(!p) return; delete __pending[id];
+  let d={}; try{ d=JSON.parse(jsonStr); }catch(e){}
+  if(ok && !d.__error) p.resolve(d); else p.reject(new Error((d&&d.__error)||"Something went wrong"));
+};
+function nativeCall(method,body){
+  return new Promise((resolve,reject)=>{
+    const id="r"+(++__seq); __pending[id]={resolve,reject};
+    try{ Native.request(id,method,JSON.stringify(body||{})); }catch(e){ delete __pending[id]; reject(e); }
+  });
+}
+/* keep the rest of the app talking in the old "/api/..." shape */
+async function api(path,opts){
+  const method=(opts&&opts.method)||"GET";
+  const body=(opts&&opts.body)?JSON.parse(opts.body):{};
+  if(path==="/api/otps") return nativeCall("otps",{});
+  if(path==="/api/refresh") return nativeCall("refresh",body);
+  if(path==="/api/accounts"&&method==="POST") return nativeCall("accounts.add",body);
+  if(path==="/api/accounts/relogin") return nativeCall("accounts.relogin",body);
+  if(path==="/api/settings") return nativeCall("settings.set",body);
+  let m=path.match(/^\/api\/accounts\/([^/]+)\/manual-login$/); if(m) return nativeCall("accounts.manualLogin",{id:m[1]});
+  m=path.match(/^\/api\/accounts\/([^/]+)$/); if(m&&method==="DELETE") return nativeCall("accounts.delete",{id:m[1]});
+  throw new Error("unsupported: "+path);
+}
+
+/* ---------- UI (same behaviour as the desktop app) ---------- */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ago=t=>!t?"not refreshed yet":`${Math.max(0,Math.round((Date.now()-t)/60000))} min ago`;
+const I={refresh:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>',
+  copy:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+  trash:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'};
+let data=null, tab="otp", otpView="account", q="";
+
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("show"),1800);}
+async function load(){data=await api("/api/otps");$("#f-int").value=String(data.settings?.intervalMin??10);$("#f-bg").checked=data.settings?.background!==false;render();}
+const hit=(...f)=>!q||f.join(" ").toLowerCase().includes(q);
+const otpBtn=o=>`<button class="otp" data-copy="${esc(o)}" title="Copy OTP">${esc(o)} ${I.copy}</button>`;
+function statusPill(a){
+  if(a.status==="logging_in")return `<span class="pill warn">Logging in…</span>`;
+  if(a.status==="needs_login")return `<span class="pill warn">Login needed</span>`;
+  if(a.status==="error")return `<span class="pill bad">Error</span>`;
+  if(a.hasSession)return `<span class="pill">Logged in</span>`;
+  return `<span class="pill warn">Not logged in</span>`;
+}
+
+function render(){
+  $$(".tab[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
+  ["otp","accounts","schedule"].forEach(p=>$("#pane-"+p).hidden=p!==tab);
+  $$(".tab[data-view]").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===otpView));
+  if(!data)return;
+  const v=data;
+  $("#sub").textContent=`${v.byAccount.length} account(s) · ${v.totalReturns} returns pending`;
+
+  const c=$("#otpContent");
+  if(!v.byAccount.length){$("#summary").textContent="";c.innerHTML=`<div class="empty"><strong>No accounts yet</strong>Go to the Accounts tab and log in your first Meesho seller account.</div>`;}
+  else{
+    $("#summary").innerHTML=`<b>${v.byAccount.length}</b> account(s) · <b>${v.byCarrier.length}</b> courier(s) · <b>${v.totalReturns}</b> returns pending`;
+    if(otpView==="account"){
+      const list=v.byAccount.filter(a=>hit(a.name,a.email,a.supplierId,...a.otps.map(o=>o.carrier)));
+      c.innerHTML=list.map(a=>`
+        <section class="card">
+          <div class="head">
+            <div class="title"><strong>${esc(a.name)}</strong>
+              <span class="sub">${[a.supplierId&&"ID: "+esc(a.supplierId),esc(a.email),ago(a.fetchedAt)].filter(Boolean).join(" · ")}</span></div>
+            ${a.otps.length?`<span class="pill">${a.otps.length} OTP(s)</span>`:statusPill(a)}
+            <button class="icon" data-refresh="${a.id}" aria-label="Refresh ${esc(a.name)}">${I.refresh}</button>
+          </div>
+          ${a.error?`<div class="error">${esc(a.error)}</div>`:""}
+          ${a.otps.length?`<div class="rows">${a.otps.map(o=>`
+            <div class="row"><div class="name">${esc(o.carrier)}<small>${esc(o.time||"")}</small></div>${otpBtn(o.otp)}<div class="count">Count: ${o.count}</div></div>`).join("")}</div>`:""}
+        </section>`).join("")||`<div class="empty">Nothing matches "${esc(q)}"</div>`;
+    }else{
+      const list=v.byCarrier.filter(k=>hit(k.carrier,...k.entries.map(e=>e.accountName+" "+e.email)));
+      c.innerHTML=list.map(k=>`
+        <section class="card">
+          <div class="head"><div class="title"><strong>${esc(k.carrier)}</strong><span class="sub">${k.entries.length} account(s)</span></div><span class="pill">Returns: ${k.totalReturns}</span></div>
+          <div class="rows">${k.entries.map(e=>`
+            <div class="row"><div class="name">${esc(e.accountName)}<small>${esc(e.time||e.email)}</small></div>${otpBtn(e.otp)}<div class="count">Count: ${e.count}</div></div>`).join("")}</div>
+        </section>`).join("")||`<div class="empty">${v.byCarrier.length?`Nothing matches "${esc(q)}"`:"No OTPs yet. Tap Refresh all."}</div>`;
+    }
+  }
+
+  const checked=new Set($$("#accList input:checked").map(i=>i.value));
+  $("#accList").innerHTML=v.byAccount.map(a=>`
+    <div class="acc">
+      <input type="checkbox" value="${a.id}" ${checked.has(a.id)?"checked":""} aria-label="Select ${esc(a.name)}" />
+      <div class="title"><strong>${esc(a.name)} <span style="font-weight:600;color:var(--ink-2)">(${esc(a.email)})</span></strong>
+        <span class="sub">${a.supplierId?"ID: "+esc(a.supplierId)+" · ":""}${a.lastLogin?"login "+ago(a.lastLogin):""}${a.lastError?` · <span style="color:var(--alert)">${esc(a.lastError)}</span>`:""}</span></div>
+      ${statusPill(a)}
+      <button class="btn small" data-manual="${a.id}" title="Re-open Meesho login">Relogin</button>
+      <button class="icon red" data-del="${a.id}" aria-label="Remove">${I.trash}</button>
+    </div>`).join("")||`<div class="empty">No accounts yet</div>`;
+  updateSel();
+}
+function updateSel(){const n=$$("#accList input:checked").length;$("#reloginSel").disabled=!n;$("#reloginSel").textContent=n?`Relogin selected (${n})`:"Relogin selected";const all=$$("#accList input");$("#selAll").checked=all.length&&n===all.length;}
+
+async function busy(btn,label,fn){const old=btn.textContent;btn.disabled=true;if(label)btn.textContent=label;try{await fn();}catch(e){toast(e.message);}finally{btn.disabled=false;btn.textContent=old;}}
+
+$$(".tab[data-tab]").forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();});
+$$(".tab[data-view]").forEach(b=>b.onclick=()=>{otpView=b.dataset.view;render();});
+$("#search").oninput=e=>{q=e.target.value.trim().toLowerCase();render();};
+const refreshAll=e=>busy(e.target,"Refreshing…",async()=>{data=await api("/api/refresh",{method:"POST",body:"{}"});render();toast(`Refreshed · ${data.totalReturns} returns pending`);});
+$("#refreshAll").onclick=refreshAll;
+$("#refreshAllAcc").onclick=refreshAll;
+
+$("#otpContent").addEventListener("click",async e=>{
+  const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.copy!==undefined){try{await navigator.clipboard.writeText(t.dataset.copy);}catch(_){}t.classList.add("copied");toast("Copied "+t.dataset.copy);setTimeout(()=>t.classList.remove("copied"),900);}
+  else if(t.dataset.refresh){t.classList.add("spin");try{data=await api("/api/refresh",{method:"POST",body:JSON.stringify({accountId:t.dataset.refresh})});render();}catch(err){toast(err.message);}}
+});
+
+$("#accList").addEventListener("change",updateSel);
+$("#selAll").onchange=e=>{$$("#accList input").forEach(i=>i.checked=e.target.checked);updateSel();};
+$("#reloginSel").onclick=e=>{const ids=$$("#accList input:checked").map(i=>i.value);busy(e.target,"Opening login…",async()=>{data=await api("/api/accounts/relogin",{method:"POST",body:JSON.stringify({ids})});render();toast("Done");});};
+$("#accList").addEventListener("click",async e=>{
+  const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.manual){busy(t,"Login…",async()=>{data=await api("/api/accounts/"+t.dataset.manual+"/manual-login",{method:"POST",body:"{}"});render();toast("Done");});}
+  else if(t.dataset.del&&confirm("Remove this account?")){await api("/api/accounts/"+t.dataset.del,{method:"DELETE"});toast("Account removed");load();}
+});
+
+$("#loginBtn").onclick=e=>{
+  const body={email:$("#f-email").value.trim(),password:$("#f-pass").value,name:$("#f-name").value.trim()};
+  $("#accErr").textContent="";
+  if(!body.email||!body.password){$("#accErr").textContent="Email and password are required.";return;}
+  busy(e.target,"Opening Meesho login…",async()=>{
+    data=await api("/api/accounts",{method:"POST",body:JSON.stringify(body)});
+    ["#f-email","#f-pass","#f-name"].forEach(s=>$(s).value="");
+    render();
+    toast("Done — check the Accounts list");
+  }).catch(err=>$("#accErr").textContent=err.message);
+};
+$("#saveInt").onclick=e=>busy(e.target,"Saving…",async()=>{await api("/api/settings",{method:"POST",body:JSON.stringify({intervalMin:+$("#f-int").value,background:$("#f-bg").checked})});toast("Saved");});
+
+load();
+setInterval(()=>{api("/api/otps").then(d=>{data=d;render();}).catch(()=>{});},30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_orange">#F2540A</color>
+    <color name="brand_orange_deep">#D84800</color>
+    <color name="ink">#101216</color>
+    <color name="ink_2">#2A2F36</color>
+    <color name="silver">#C8CBD0</color>
+    <color name="white">#FFFFFF</color>
+    <color name="ic_launcher_background">#F2540A</color>
+</resources>

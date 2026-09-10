@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tools ki Dukan · OTP</string>
+    <string name="svc_channel">OTP background</string>
+    <string name="svc_title">Tools ki Dukan · OTP running</string>
+    <string name="svc_text">Keeping accounts logged in and refreshing OTPs</string>
+</resources>

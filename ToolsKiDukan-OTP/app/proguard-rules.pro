@@ -1,0 +1,1 @@
+-keepclassmembers class com.toolskidukan.otp.** { @android.webkit.JavascriptInterface <methods>; }
