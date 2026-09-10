@@ -17,6 +17,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 
 /**
@@ -54,16 +55,39 @@ class ScrapeService : Service() {
     }
 
     private suspend fun refreshAll() {
+        if (MeeshoEngine.awaitingOtp) return       // user is mid-login; don't disturb the page
         val accounts = Store.accounts(this)
         for (i in 0 until accounts.length()) {
             val acc = accounts.getJSONObject(i)
             try {
-                val r = MeeshoEngine.fetch(this, acc)
+                var r = MeeshoEngine.lock.withLock { MeeshoEngine.fetch(this, acc) }
+                // session died -> silently log back in with the saved password
+                if (r.optBoolean("needsLogin") && acc.optString("password").isNotBlank()) {
+                    val lr = MeeshoEngine.lock.withLock {
+                        MeeshoEngine.silentLogin(this, acc.optString("email"), acc.optString("password"))
+                    }
+                    if (lr.optBoolean("ok") && lr.optString("session").isNotBlank()) {
+                        val ch = mutableMapOf<String, Any?>("session" to lr.optString("session"),
+                            "status" to "ok", "lastLogin" to System.currentTimeMillis(), "lastError" to null)
+                        if (lr.optString("slug").isNotBlank()) ch["slug"] = lr.optString("slug")
+                        val ln = lr.optString("storeName")
+                        if (ln.isNotBlank()) { ch["storeName"] = ln; if (acc.optBoolean("autoName", true)) ch["name"] = ln }
+                        Store.patchAccount(this, acc.optString("id"), ch)
+                        val fresh = Store.findAccount(this, acc.optString("id"))
+                        if (fresh != null) r = MeeshoEngine.lock.withLock { MeeshoEngine.fetch(this, fresh) }
+                    } else if (lr.optBoolean("needsOtp")) {
+                        MeeshoEngine.cancelOtp()   // can't ask the user from the background
+                        Store.patchAccount(this, acc.optString("id"),
+                            mapOf("status" to "needs_otp", "lastError" to "Open the app and enter the OTP"))
+                        continue
+                    }
+                }
                 if (r.optBoolean("ok")) {
                     Store.putCache(this, acc.optString("id"), r.optJSONArray("otps") ?: JSONArray(), null)
                     val changes = mutableMapOf<String, Any?>("status" to "ok", "lastError" to null, "session" to acc.optString("session"))
                     if (r.optString("slug").isNotBlank()) changes["slug"] = r.optString("slug")
-                    val sn = r.optString("storeName"); if (sn.isNotBlank()) changes["storeName"] = sn
+                    val sn = r.optString("storeName")
+                    if (sn.isNotBlank()) { changes["storeName"] = sn; if (acc.optBoolean("autoName", true)) changes["name"] = sn }
                     Store.patchAccount(this, acc.optString("id"), changes)
                 } else if (r.optBoolean("needsLogin")) {
                     Store.patchAccount(this, acc.optString("id"), mapOf("status" to "needs_login", "lastError" to r.optString("error")))

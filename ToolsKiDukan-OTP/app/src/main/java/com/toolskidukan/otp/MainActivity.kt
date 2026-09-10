@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -27,6 +28,7 @@ class MainActivity : AppCompatActivity() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var pendingLogin: CompletableDeferred<Intent?>? = null
+    private var pendingOtpAccount: String? = null
     private lateinit var loginLauncher: ActivityResultLauncher<Intent>
     private lateinit var notifLauncher: ActivityResultLauncher<String>
 
@@ -93,8 +95,10 @@ class MainActivity : AppCompatActivity() {
         "otps"                 -> view()
         "refresh"              -> { refresh(body.optString("accountId", "").ifBlank { null }); view() }
         "accounts.add"         -> addAccount(body)
-        "accounts.relogin"     -> { relogin(idsFrom(body)); view() }
-        "accounts.manualLogin" -> { relogin(listOf(body.getString("id"))); view() }
+        "accounts.relogin"     -> reloginPublic(idsFrom(body))
+        "accounts.manualLogin" -> reloginPublic(listOf(body.getString("id")))
+        "accounts.otp"         -> submitOtp(body)
+        "accounts.otpCancel"   -> { MeeshoEngine.cancelOtp(); pendingOtpAccount = null; view() }
         "accounts.delete"      -> { Store.deleteAccount(this, body.getString("id")); JSONObject().put("ok", true) }
         "settings.set"         -> saveSettings(body)
         else                   -> JSONObject().put("__error", "unknown method: $method")
@@ -117,44 +121,88 @@ class MainActivity : AppCompatActivity() {
         val acc = JSONObject().apply {
             put("id", System.currentTimeMillis().toString())
             put("email", email); put("password", password)
-            put("name", if (nameGiven.isNotBlank()) nameGiven else email.substringBefore("@"))
+            put("name", if (nameGiven.isNotBlank()) nameGiven else "Loading store name…")
             put("autoName", nameGiven.isBlank())
             put("slug", slug); put("status", "new")
         }
         Store.upsertAccount(this, acc)
-        doInteractiveLogin(acc)          // password + SMS-OTP done here
+        val r = hiddenLogin(acc)         // Meesho page is never shown
         if (Store.accounts(this).length() > 0 && Store.settings(this).optBoolean("background", true)) ScrapeService.start(this)
-        return view()
+        return view().put("login", r)
     }
 
-    private suspend fun relogin(ids: List<String>?) {
+    private suspend fun reloginPublic(ids: List<String>?): JSONObject {
         val all = Store.accounts(this)
         val targets = (0 until all.length()).map { all.getJSONObject(it) }
             .filter { ids == null || ids.contains(it.optString("id")) }
-        for (acc in targets) doInteractiveLogin(acc)
+        var last = JSONObject().put("ok", true)
+        for (acc in targets) last = hiddenLogin(acc)
+        return view().put("login", last)
     }
 
-    /** Opens the visible login screen, saves the session, then fetches OTPs once. */
-    private suspend fun doInteractiveLogin(acc: JSONObject) {
-        Store.patchAccount(this, acc.optString("id"), mapOf("status" to "logging_in", "lastError" to null))
-        val deferred = CompletableDeferred<Intent?>()
-        pendingLogin = deferred
-        loginLauncher.launch(LoginActivity.intent(this, acc.optString("email"), acc.optString("password")))
-        val data = deferred.await() ?: run {
-            Store.patchAccount(this, acc.optString("id"), mapOf("status" to "needs_login", "lastError" to "Login cancelled"))
-            return
+    /**
+     * Logs in without ever showing the Meesho page. If Meesho demands an SMS-OTP we park the
+     * hidden page and tell the UI to ask for the 6 digits in our own box.
+     * Returns { ok, needsOtp, accountId, error }.
+     */
+    private suspend fun hiddenLogin(acc: JSONObject): JSONObject {
+        val id = acc.optString("id")
+        Store.patchAccount(this, id, mapOf("status" to "logging_in", "lastError" to null))
+        val r = try {
+            MeeshoEngine.lock.withLock {
+                MeeshoEngine.silentLogin(this, acc.optString("email"), acc.optString("password"))
+            }
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message ?: "Login failed")
         }
-        val session = data.getStringExtra("session") ?: ""
-        val slug = data.getStringExtra("slug") ?: ""
-        if (session.isBlank()) {
-            Store.patchAccount(this, acc.optString("id"), mapOf("status" to "needs_login", "lastError" to "Login not completed"))
-            return
+
+        if (r.optBoolean("needsOtp")) {
+            pendingOtpAccount = id
+            Store.patchAccount(this, id, mapOf("status" to "needs_otp", "lastError" to "Enter the OTP sent by Meesho"))
+            return JSONObject().put("ok", false).put("needsOtp", true).put("accountId", id)
         }
-        val changes = mutableMapOf<String, Any?>("session" to session, "status" to "ok",
-            "lastLogin" to System.currentTimeMillis(), "lastError" to null)
-        if (slug.isNotBlank()) changes["slug"] = slug
-        Store.patchAccount(this, acc.optString("id"), changes)
-        refreshOne(acc.optString("id"))
+        return applyLoginResult(id, r)
+    }
+
+    private suspend fun submitOtp(body: JSONObject): JSONObject {
+        val id = body.optString("id").ifBlank { pendingOtpAccount ?: "" }
+        val code = body.optString("code").trim()
+        if (id.isBlank()) return view().put("login", JSONObject().put("ok", false).put("error", "No login is waiting"))
+        if (code.isBlank()) return view().put("login", JSONObject().put("ok", false).put("error", "Enter the OTP"))
+        val r = try {
+            MeeshoEngine.lock.withLock { MeeshoEngine.submitOtp(this, code) }
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message ?: "OTP failed")
+        }
+        if (r.optBoolean("needsOtp") && !r.optBoolean("ok")) {
+            return view().put("login", JSONObject().put("ok", false).put("needsOtp", true)
+                .put("accountId", id).put("error", r.optString("error")))
+        }
+        pendingOtpAccount = null
+        return view().put("login", applyLoginResult(id, r))
+    }
+
+    /** Saves a successful hidden login (session, slug, real store name) and pulls OTPs once. */
+    private suspend fun applyLoginResult(id: String, r: JSONObject): JSONObject {
+        if (!r.optBoolean("ok") || r.optString("session").isBlank()) {
+            val msg = r.optString("error").ifBlank { "Login failed" }
+            Store.patchAccount(this, id, mapOf("status" to "needs_login", "lastError" to msg))
+            return JSONObject().put("ok", false).put("error", msg).put("accountId", id)
+        }
+        val acc = Store.findAccount(this, id)
+        val changes = mutableMapOf<String, Any?>(
+            "session" to r.optString("session"), "status" to "ok",
+            "lastLogin" to System.currentTimeMillis(), "lastError" to null
+        )
+        if (r.optString("slug").isNotBlank()) changes["slug"] = r.optString("slug")
+        val sn = r.optString("storeName")
+        if (sn.isNotBlank()) {
+            changes["storeName"] = sn
+            if (acc == null || acc.optBoolean("autoName", true)) changes["name"] = sn
+        }
+        Store.patchAccount(this, id, changes)
+        refreshOne(id, allowRelogin = false)   // just logged in; don't loop
+        return JSONObject().put("ok", true).put("accountId", id).put("storeName", sn)
     }
 
     private suspend fun refresh(accountId: String?) {
@@ -164,10 +212,11 @@ class MainActivity : AppCompatActivity() {
         for (id in targets) refreshOne(id)
     }
 
-    private suspend fun refreshOne(id: String) {
+    private suspend fun refreshOne(id: String, allowRelogin: Boolean = true) {
         val acc = Store.findAccount(this, id) ?: return
+        if (MeeshoEngine.awaitingOtp) return          // a hidden login is parked on the OTP screen
         try {
-            val r = MeeshoEngine.fetch(this, acc)
+            val r = MeeshoEngine.lock.withLock { MeeshoEngine.fetch(this, acc) }
             when {
                 r.optBoolean("ok") -> {
                     Store.putCache(this, id, r.optJSONArray("otps") ?: JSONArray(), null)
@@ -177,7 +226,16 @@ class MainActivity : AppCompatActivity() {
                     if (sn.isNotBlank()) { changes["storeName"] = sn; if (acc.optBoolean("autoName", true)) changes["name"] = sn }
                     Store.patchAccount(this, id, changes)
                 }
-                r.optBoolean("needsLogin") -> Store.patchAccount(this, id, mapOf("status" to "needs_login", "lastError" to r.optString("error")))
+                r.optBoolean("needsLogin") -> {
+                    // session died -> log back in silently with the saved password, no user action
+                    if (allowRelogin && acc.optString("password").isNotBlank()) {
+                        val lr = hiddenLogin(acc)
+                        if (!lr.optBoolean("ok") && !lr.optBoolean("needsOtp"))
+                            Store.patchAccount(this, id, mapOf("status" to "needs_login", "lastError" to lr.optString("error")))
+                    } else {
+                        Store.patchAccount(this, id, mapOf("status" to "needs_login", "lastError" to r.optString("error")))
+                    }
+                }
                 else -> Store.patchAccount(this, id, mapOf("status" to "error", "lastError" to r.optString("error")))
             }
         } catch (e: Exception) {
