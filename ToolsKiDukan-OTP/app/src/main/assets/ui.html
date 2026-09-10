@@ -72,6 +72,20 @@
   <div><div style="font-weight:800;font-size:15px">Return OTPs</div><div class="sub" id="sub">all Meesho seller accounts, on this phone</div></div>
 </header>
 
+<div id="otpModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#14161a;border:1px solid #2a2f37;border-radius:16px;max-width:360px;width:100%;padding:20px">
+    <div style="font-weight:800;font-size:17px;margin-bottom:6px">Enter Meesho OTP</div>
+    <div class="sub" id="otpWho" style="margin-bottom:14px">Meesho sent a code to your registered mobile/email.</div>
+    <input id="otpCode" type="tel" inputmode="numeric" maxlength="8" placeholder="6-digit OTP"
+      style="width:100%;font-size:22px;letter-spacing:6px;text-align:center;padding:12px;border-radius:10px;border:1px solid #2a2f37;background:#0e1013;color:#fff" />
+    <div id="otpErr" style="color:#ff8a6b;font-size:13px;min-height:18px;margin-top:8px"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn" id="otpCancel" style="flex:1">Cancel</button>
+      <button class="btn primary" id="otpGo" style="flex:2">Verify &amp; save</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" data-tab="otp" aria-selected="true">OTP</button>
@@ -110,10 +124,10 @@
       <div class="card" style="padding:14px">
         <div class="field"><label for="f-email">Meesho supplier email / mobile</label><input id="f-email" type="text" autocomplete="off" /></div>
         <div class="field"><label for="f-pass">Password</label><input id="f-pass" type="password" autocomplete="new-password" /></div>
-        <div class="field"><label for="f-name">Store name (optional)</label><input id="f-name" placeholder="Shown in the OTP list" /></div>
+        <div class="field"><label for="f-name">Nickname (optional)</label><input id="f-name" placeholder="Leave blank to use the Meesho store name" /></div>
         <div class="err" id="accErr"></div>
         <button class="btn primary" id="loginBtn" style="width:100%">Login</button>
-        <small style="display:block;color:var(--ink-2);margin-top:8px">The Meesho login page opens once so you can enter the SMS-OTP. After that this account stays logged in.</small>
+        <small style="display:block;color:var(--ink-2);margin-top:8px">Login happens inside this app — the Meesho page is never shown. If Meesho asks for an OTP, a box will pop up here. After that the account re-logs in by itself.</small>
       </div>
     </section>
 
@@ -158,6 +172,8 @@ async function api(path,opts){
   if(path==="/api/accounts"&&method==="POST") return nativeCall("accounts.add",body);
   if(path==="/api/accounts/relogin") return nativeCall("accounts.relogin",body);
   if(path==="/api/settings") return nativeCall("settings.set",body);
+  if(path==="/api/accounts/otp") return nativeCall("accounts.otp",body);
+  if(path==="/api/accounts/otp-cancel") return nativeCall("accounts.otpCancel",body);
   let m=path.match(/^\/api\/accounts\/([^/]+)\/manual-login$/); if(m) return nativeCall("accounts.manualLogin",{id:m[1]});
   m=path.match(/^\/api\/accounts\/([^/]+)$/); if(m&&method==="DELETE") return nativeCall("accounts.delete",{id:m[1]});
   throw new Error("unsupported: "+path);
@@ -178,6 +194,7 @@ const hit=(...f)=>!q||f.join(" ").toLowerCase().includes(q);
 const otpBtn=o=>`<button class="otp" data-copy="${esc(o)}" title="Copy OTP">${esc(o)} ${I.copy}</button>`;
 function statusPill(a){
   if(a.status==="logging_in")return `<span class="pill warn">Logging in…</span>`;
+  if(a.status==="needs_otp")return `<span class="pill warn">OTP needed</span>`;
   if(a.status==="needs_login")return `<span class="pill warn">Login needed</span>`;
   if(a.status==="error")return `<span class="pill bad">Error</span>`;
   if(a.hasSession)return `<span class="pill">Logged in</span>`;
@@ -228,7 +245,7 @@ function render(){
       <div class="title"><strong>${esc(a.name)} <span style="font-weight:600;color:var(--ink-2)">(${esc(a.email)})</span></strong>
         <span class="sub">${a.supplierId?"ID: "+esc(a.supplierId)+" · ":""}${a.lastLogin?"login "+ago(a.lastLogin):""}${a.lastError?` · <span style="color:var(--alert)">${esc(a.lastError)}</span>`:""}</span></div>
       ${statusPill(a)}
-      <button class="btn small" data-manual="${a.id}" title="Re-open Meesho login">Relogin</button>
+      <button class="btn small" data-manual="${a.id}" title="Log in again (hidden)">Relogin</button>
       <button class="icon red" data-del="${a.id}" aria-label="Remove">${I.trash}</button>
     </div>`).join("")||`<div class="empty">No accounts yet</div>`;
   updateSel();
@@ -242,6 +259,11 @@ $$(".tab[data-view]").forEach(b=>b.onclick=()=>{otpView=b.dataset.view;render();
 $("#search").oninput=e=>{q=e.target.value.trim().toLowerCase();render();};
 const refreshAll=e=>busy(e.target,"Refreshing…",async()=>{data=await api("/api/refresh",{method:"POST",body:"{}"});render();toast(`Refreshed · ${data.totalReturns} returns pending`);});
 $("#refreshAll").onclick=refreshAll;
+/* Tapping the OTP tab refreshes every account automatically */
+document.querySelector('.tab[data-tab="otp"]').addEventListener("click",()=>{
+  api("/api/refresh",{method:"POST",body:"{}"}).then(d=>{data=d;render();
+    toast(`Refreshed · ${data.totalReturns} returns pending`);}).catch(()=>{});
+});
 $("#refreshAllAcc").onclick=refreshAll;
 
 $("#otpContent").addEventListener("click",async e=>{
@@ -255,21 +277,53 @@ $("#selAll").onchange=e=>{$$("#accList input").forEach(i=>i.checked=e.target.che
 $("#reloginSel").onclick=e=>{const ids=$$("#accList input:checked").map(i=>i.value);busy(e.target,"Opening login…",async()=>{data=await api("/api/accounts/relogin",{method:"POST",body:JSON.stringify({ids})});render();toast("Done");});};
 $("#accList").addEventListener("click",async e=>{
   const t=e.target.closest("button");if(!t)return;
-  if(t.dataset.manual){busy(t,"Login…",async()=>{data=await api("/api/accounts/"+t.dataset.manual+"/manual-login",{method:"POST",body:"{}"});render();toast("Done");});}
+  if(t.dataset.manual){busy(t,"Login…",async()=>{data=await api("/api/accounts/"+t.dataset.manual+"/manual-login",{method:"POST",body:"{}"});render();if(afterLogin(data))toast("Logged in");});}
   else if(t.dataset.del&&confirm("Remove this account?")){await api("/api/accounts/"+t.dataset.del,{method:"DELETE"});toast("Account removed");load();}
 });
+
+let otpFor=null;
+function showOtp(accountId,msg){
+  otpFor=accountId;
+  $("#otpErr").textContent=msg||"";
+  $("#otpCode").value="";
+  $("#otpModal").style.display="flex";
+  setTimeout(()=>$("#otpCode").focus(),100);
+}
+function hideOtp(){ $("#otpModal").style.display="none"; otpFor=null; }
+
+/* Handles what the hidden login came back with. Meesho's page is never shown. */
+function afterLogin(res){
+  const L=res&&res.login;
+  if(L&&L.needsOtp){ showOtp(L.accountId,L.error||""); return false; }
+  if(L&&L.ok===false&&L.error){ toast(L.error); return false; }
+  return true;
+}
+
+$("#otpGo").onclick=e=>{
+  const code=$("#otpCode").value.trim();
+  if(!code){$("#otpErr").textContent="Enter the OTP.";return;}
+  busy(e.target,"Verifying…",async()=>{
+    data=await api("/api/accounts/otp",{method:"POST",body:JSON.stringify({id:otpFor,code})});
+    const L=data.login||{};
+    if(L.needsOtp&&!L.ok){ $("#otpErr").textContent=L.error||"Wrong OTP, try again."; render(); return; }
+    hideOtp(); render();
+    toast(L.ok?("Logged in"+(L.storeName?" · "+L.storeName:"")):(L.error||"Login failed"));
+  }).catch(err=>{$("#otpErr").textContent=err.message;});
+};
+$("#otpCancel").onclick=async()=>{ try{data=await api("/api/accounts/otp-cancel",{method:"POST",body:"{}"});render();}catch(e){} hideOtp(); };
 
 $("#loginBtn").onclick=e=>{
   const body={email:$("#f-email").value.trim(),password:$("#f-pass").value,name:$("#f-name").value.trim()};
   $("#accErr").textContent="";
   if(!body.email||!body.password){$("#accErr").textContent="Email and password are required.";return;}
-  busy(e.target,"Opening Meesho login…",async()=>{
+  busy(e.target,"Logging in…",async()=>{
     data=await api("/api/accounts",{method:"POST",body:JSON.stringify(body)});
     ["#f-email","#f-pass","#f-name"].forEach(s=>$(s).value="");
     render();
-    toast("Done — check the Accounts list");
+    if(afterLogin(data)) toast("Logged in — OTPs loading");
   }).catch(err=>$("#accErr").textContent=err.message);
 };
+
 $("#saveInt").onclick=e=>busy(e.target,"Saving…",async()=>{await api("/api/settings",{method:"POST",body:JSON.stringify({intervalMin:+$("#f-int").value,background:$("#f-bg").checked})});toast("Saved");});
 
 load();
